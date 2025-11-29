@@ -51,7 +51,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write # Needed to push a commit and tag
-      id-token: write # Needed for OIDC authentication with PyPI
       
     steps:
       - name: Checkout repository
