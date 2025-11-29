@@ -68,7 +68,7 @@ jobs:
         run: pip install poetry
           
       - name: Install dependencies
-        run: poetry install --no-dev --no-root # Install only main dependencies for building
+        run: poetry install --only main # Install only main dependencies for building
 
       - name: Build package
         run: poetry build # Build the wheel and sdist
