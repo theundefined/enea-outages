@@ -2,11 +2,9 @@ import pytest
 from datetime import datetime
 from bs4 import BeautifulSoup
 import httpx
-from httpx import Response
 from pytest_httpx import HTTPXMock
 
 from enea_outages.client import EneaOutagesClient, AsyncEneaOutagesClient
-from enea_outages.models import Outage
 
 # Sample HTML block for testing
 SAMPLE_HTML_BLOCK = """

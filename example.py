@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime
 
 from enea_outages.client import AsyncEneaOutagesClient, EneaOutagesClient
 

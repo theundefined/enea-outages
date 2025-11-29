@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
