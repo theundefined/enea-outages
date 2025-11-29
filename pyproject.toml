@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "enea-outages"
+version = "0.1.0"
+description = "Python library to get information about power outages from Enea Operator."
+authors = ["TheUndefined <kontakt@distracted.pl>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "enea_outages", from = "src"}]
+repository = "https://github.com/TheUndefined/enea-outages-py"
+keywords = ["enea", "outages", "power", "api"]
+
+[tool.poetry.scripts]
+enea-outages = "enea_outages.cli:main"
+
+
+[tool.poetry.dependencies]
+python = "^3.9"
+httpx = "^0.28.1"
+beautifulsoup4 = "^4.12.2"
+geopy = "^2.4.1"
+folium = "^0.15.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-httpx = "^0.28.0"
+ruff = "^0.1.6"
+black = "^23.11.0"
+mypy = "^1.7.0"
+types-beautifulsoup4 = "^4.12.0"
+types-requests = "^2.31.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+
+[tool.black]
+line-length = 120
+
+[tool.mypy]
+ignore_missing_imports = true
+pretty = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
