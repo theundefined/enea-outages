@@ -33,3 +33,7 @@ venv/
 .env.*
 
 # Temporary files
+
+# coverage
+coverage.xml
+.coverage
