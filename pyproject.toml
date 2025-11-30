@@ -6,8 +6,16 @@ authors = ["TheUndefined <kontakt@distracted.pl>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "enea_outages", from = "src"}]
-repository = "https://github.com/TheUndefined/enea-outages-py"
+homepage = "https://github.com/TheUndefined/enea-outages"
+repository = "https://github.com/TheUndefined/enea-outages"
 keywords = ["enea", "outages", "power", "api"]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
 
 [tool.poetry.scripts]
 enea-outages = "enea_outages.cli:main"
