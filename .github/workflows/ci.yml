@@ -62,6 +62,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          
+      - name: Install Hatch
+        run: pip install hatch
 
       - name: Build package
         run: hatch build
