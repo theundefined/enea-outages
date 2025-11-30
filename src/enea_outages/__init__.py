@@ -1,0 +1,12 @@
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("enea-outages")
+except PackageNotFoundError:
+    # Fallback for when the package is not installed (e.g., in development)
+    __version__ = "0.0.0-dev"
+
+from .client import EneaOutagesClient, AsyncEneaOutagesClient
+from .models import Outage
+
+__all__ = ["EneaOutagesClient", "AsyncEneaOutagesClient", "Outage"]
