@@ -2,11 +2,18 @@ import argparse
 import asyncio
 
 from .client import AsyncEneaOutagesClient
+from .models import OutageType
 
 
 async def async_main():
     """Asynchronous main function to handle CLI logic."""
     parser = argparse.ArgumentParser(description="Enea Outages CLI Tool")
+    parser.add_argument(
+        "--type",
+        choices=[t.name.lower() for t in OutageType],
+        default=OutageType.UNPLANNED.name.lower(),
+        help="Specify the type of outage to fetch. Default is 'unplanned'.",
+    )
     parser.add_argument(
         "--list-regions",
         action="store_true",
@@ -23,6 +30,7 @@ async def async_main():
     )
     args = parser.parse_args()
 
+    outage_type = OutageType[args.type.upper()]
     client = AsyncEneaOutagesClient()
 
     if args.list_regions:
@@ -39,13 +47,13 @@ async def async_main():
             print(f"An error occurred: {e}")
         return
 
-    print(f"Fetching outages for region: {args.region}...")
+    print(f"Fetching {args.type} outages for region: {args.region}...")
     try:
         if args.address:
             print(f"Filtering for address: {args.address}")
-            outages = await client.get_outages_for_address(args.address, args.region)
+            outages = await client.get_outages_for_address(args.address, args.region, outage_type)
         else:
-            outages = await client.get_outages_for_region(args.region)
+            outages = await client.get_outages_for_region(args.region, outage_type)
 
         if not outages:
             print("No outages found for the specified criteria.")
@@ -56,7 +64,10 @@ async def async_main():
             print("-" * 40)
             print(f"  Obszar: {outage.region}")
             print(f"  Opis: {outage.description}")
-            print(f"  Przewidywany koniec: {outage.end_time.strftime('%Y-%m-%d %H:%M')}")
+            if outage.start_time:
+                print(f"  Początek: {outage.start_time.strftime('%Y-%m-%d %H:%M')}")
+            if outage.end_time:
+                print(f"  Koniec:   {outage.end_time.strftime('%Y-%m-%d %H:%M')}")
         print("-" * 40)
 
     except Exception as e:

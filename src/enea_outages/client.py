@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Tuple
 
 import httpx
 from bs4 import BeautifulSoup
 
-from .models import Outage
+from .models import Outage, OutageType
 
 
 class EneaOutagesClient:
@@ -28,21 +29,37 @@ class EneaOutagesClient:
         "grudnia": 12,
     }
 
-    def _parse_end_time(self, date_info: str) -> datetime:
-        """Parses the date information string into a datetime object."""
-        # Example: "19 listopada 2025 r.  do godziny 12:30"
-        match = re.search(
-            r"(\d{1,2})\s+(\w+)\s+(\d{4})\s+r\.\s+do\s+godziny\s+(\d{1,2}):(\d{1,2})", date_info
+    def _parse_date_formats(self, date_info: str) -> Tuple[datetime | None, datetime | None]:
+        """
+        Parses different date formats and returns a tuple of (start_time, end_time).
+        """
+        # Planned outage format: "8 grudnia 2025 r. w godz. 08:00 - 16:00"
+        planned_match = re.search(
+            r"(\d{1,2})\s+(\w+)\s+(\d{4})\s+r\.\s+w\s+godz\.\s+(\d{1,2}):(\d{2})\s+-\s+(\d{1,2}):(\d{2})", date_info
         )
-        if not match:
-            raise ValueError(f"Could not parse date information: {date_info}")
+        if planned_match:
+            day, month_name, year, start_hour, start_min, end_hour, end_min = planned_match.groups()
+            month = self.MONTH_MAP.get(month_name.lower())
+            if not month:
+                raise ValueError(f"Unknown month name: {month_name}")
 
-        day, month_name, year, hour, minute = match.groups()
-        month = self.MONTH_MAP.get(month_name.lower())
-        if month is None:
-            raise ValueError(f"Unknown month name: {month_name}")
+            start_time = datetime(int(year), month, int(day), int(start_hour), int(start_min))
+            end_time = datetime(int(year), month, int(day), int(end_hour), int(end_min))
+            return start_time, end_time
 
-        return datetime(int(year), month, int(day), int(hour), int(minute))
+        # Unplanned outage format: "19 listopada 2025 r. do godziny 12:30"
+        unplanned_match = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})\s+r\.\s+do\s+godziny\s+(\d{1,2}):(\d{2})", date_info)
+        if unplanned_match:
+            day, month_name, year, hour, minute = unplanned_match.groups()
+            month = self.MONTH_MAP.get(month_name.lower())
+            if not month:
+                raise ValueError(f"Unknown month name: {month_name}")
+
+            # For unplanned, we only have an end time. Start time is unknown.
+            end_time = datetime(int(year), month, int(day), int(hour), int(minute))
+            return None, end_time
+
+        raise ValueError(f"Could not parse date information: {date_info}")
 
     def _parse_outage_block(self, block: BeautifulSoup) -> Outage:
         """Parses a single outage HTML block into an Outage object."""
@@ -54,28 +71,31 @@ class EneaOutagesClient:
         description = description_tag.get_text(strip=True) if description_tag else "Brak opisu"
         date_info_str = date_info_tag.get_text(strip=True) if date_info_tag else ""
 
-        end_time = self._parse_end_time(date_info_str)
+        start_time, end_time = self._parse_date_formats(date_info_str)
 
-        return Outage(region=region, description=description, end_time=end_time)
+        return Outage(region=region, description=description, start_time=start_time, end_time=end_time)
 
-    def _fetch_raw_html(self, region: str) -> str:
-        """Fetches the raw HTML content for a given region."""
-        params = {"page": "awarie", "oddzial": region}
+    def _fetch_raw_html(self, region: str, outage_type: OutageType) -> str:
+        """Fetches the raw HTML content for a given region and outage type."""
+        params = {"page": outage_type.value, "oddzial": region}
         response = httpx.get(self.BASE_URL, params=params)
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        response.raise_for_status()
         return response.text
 
-    def get_outages_for_region(self, region: str = "Poznań") -> list[Outage]:
+    def get_outages_for_region(
+        self, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    ) -> list[Outage]:
         """
-        Retrieves all current power outages for a specified region.
+        Retrieves power outages for a specified region and type.
 
         Args:
-            region (str): The name of the Enea Operator branch (e.g., "Poznań").
+            region: The name of the Enea Operator branch (e.g., "Poznań").
+            outage_type: The type of outage to fetch (PLANNED or UNPLANNED).
 
         Returns:
-            list[Outage]: A list of Outage objects.
+            A list of Outage objects.
         """
-        html = self._fetch_raw_html(region)
+        html = self._fetch_raw_html(region, outage_type)
         soup = BeautifulSoup(html, "html.parser")
         outage_blocks = soup.find_all("div", {"class": "unpl block info"})
 
@@ -84,75 +104,64 @@ class EneaOutagesClient:
             try:
                 outages.append(self._parse_outage_block(block))
             except (ValueError, AttributeError) as e:
-                print(f"Error parsing outage block: {e} in block: {block}")
-                # Optionally log the error or handle it differently
-
+                print(f"Error parsing outage block: {e}")
         return outages
 
-    def get_outages_for_address(self, address: str, region: str = "Poznań") -> list[Outage]:
+    def get_outages_for_address(
+        self, address: str, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    ) -> list[Outage]:
         """
-        Retrieves power outages affecting a specific address within a region.
+        Retrieves power outages affecting a specific address.
 
         Args:
-            address (str): The specific street or address to check (e.g., "Zakopiańska").
-            region (str): The name of the Enea Operator branch (e.g., "Poznań").
+            address: The specific street or address to check.
+            region: The name of the Enea Operator branch.
+            outage_type: The type of outage to fetch.
 
         Returns:
-            list[Outage]: A list of Outage objects relevant to the given address.
+            A list of Outage objects relevant to the given address.
         """
-        all_outages = self.get_outages_for_region(region)
-        
-        # Filter locally, as Enea website does not provide specific address filtering via URL
-        filtered_outages = [
-            outage for outage in all_outages if address.lower() in outage.description.lower()
-        ]
-        return filtered_outages
+        all_outages = self.get_outages_for_region(region, outage_type)
+        return [o for o in all_outages if address.lower() in o.description.lower()]
 
     def get_available_regions(self) -> list[str]:
         """
         Retrieves the list of available regions (oddziały) from the Enea website.
 
         Returns:
-            list[str]: A list of available region names.
+            A list of available region names.
         """
-        # We can fetch with any valid region, or no region, to get the page with the form
-        html = self._fetch_raw_html(region="Poznań")
+        # The list of regions is the same for all page types, so we can hardcode one.
+        html = self._fetch_raw_html(region="Poznań", outage_type=OutageType.PLANNED)
         soup = BeautifulSoup(html, "html.parser")
-        
+
         region_select = soup.find("select", {"id": "oddzial"})
         if not region_select:
             return []
 
-        regions = [
+        return [
             option["value"]
             for option in region_select.find_all("option")
             if option.has_attr("value") and option["value"]
         ]
-        return regions
 
 
 class AsyncEneaOutagesClient(EneaOutagesClient):
     """Asynchronous client for Enea Operator power outages."""
 
-    async def _fetch_raw_html(self, region: str) -> str:
-        """Fetches the raw HTML content for a given region asynchronously."""
+    async def _fetch_raw_html(self, region: str, outage_type: OutageType) -> str:
+        """Fetches the raw HTML content asynchronously."""
         async with httpx.AsyncClient() as client:
-            params = {"page": "awarie", "oddzial": region}
+            params = {"page": outage_type.value, "oddzial": region}
             response = await client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             return response.text
 
-    async def get_outages_for_region(self, region: str = "Poznań") -> list[Outage]:
-        """
-        Retrieves all current power outages for a specified region asynchronously.
-
-        Args:
-            region (str): The name of the Enea Operator branch (e.g., "Poznań").
-
-        Returns:
-            list[Outage]: A list of Outage objects.
-        """
-        html = await self._fetch_raw_html(region)
+    async def get_outages_for_region(
+        self, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    ) -> list[Outage]:
+        """Retrieves power outages for a specified region and type asynchronously."""
+        html = await self._fetch_raw_html(region, outage_type)
         soup = BeautifulSoup(html, "html.parser")
         outage_blocks = soup.find_all("div", {"class": "unpl block info"})
 
@@ -161,45 +170,28 @@ class AsyncEneaOutagesClient(EneaOutagesClient):
             try:
                 outages.append(self._parse_outage_block(block))
             except (ValueError, AttributeError) as e:
-                print(f"Error parsing outage block: {e} in block: {block}")
-
+                print(f"Error parsing outage block: {e}")
         return outages
 
-    async def get_outages_for_address(self, address: str, region: str = "Poznań") -> list[Outage]:
-        """
-        Retrieves power outages affecting a specific address within a region asynchronously.
-
-        Args:
-            address (str): The specific street or address to check (e.g., "Zakopiańska").
-            region (str): The name of the Enea Operator branch (e.g., "Poznań").
-
-        Returns:
-            list[Outage]: A list of Outage objects relevant to the given address.
-        """
-        all_outages = await self.get_outages_for_region(region)
-        filtered_outages = [
-            outage for outage in all_outages if address.lower() in outage.description.lower()
-        ]
-        return filtered_outages
+    async def get_outages_for_address(
+        self, address: str, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    ) -> list[Outage]:
+        """Retrieves power outages affecting a specific address asynchronously."""
+        all_outages = await self.get_outages_for_region(region, outage_type)
+        return [o for o in all_outages if address.lower() in o.description.lower()]
 
     async def get_available_regions(self) -> list[str]:
-        """
-        Retrieves the list of available regions (oddziały) from the Enea website asynchronously.
-
-        Returns:
-            list[str]: A list of available region names.
-        """
-        # We can fetch with any valid region, or no region, to get the page with the form
-        html = await self._fetch_raw_html(region="Poznań")
+        """Retrieves the list of available regions asynchronously."""
+        # The list of regions is the same for all page types, so we can hardcode one.
+        html = await self._fetch_raw_html(region="Poznań", outage_type=OutageType.PLANNED)
         soup = BeautifulSoup(html, "html.parser")
-        
+
         region_select = soup.find("select", {"id": "oddzial"})
         if not region_select:
             return []
 
-        regions = [
+        return [
             option["value"]
             for option in region_select.find_all("option")
             if option.has_attr("value") and option["value"]
         ]
-        return regions
