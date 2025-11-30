@@ -1,6 +1,5 @@
 [tool.poetry]
 name = "enea-outages"
-version = "0.1.0"
 description = "Python library to get information about power outages from Enea Operator."
 authors = ["TheUndefined <kontakt@distracted.pl>"]
 license = "MIT"
@@ -20,6 +19,10 @@ classifiers=[
 [tool.poetry.scripts]
 enea-outages = "enea_outages.cli:main"
 
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "semver"
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -39,8 +42,8 @@ types-requests = "^2.31.0"
 
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.ruff]
 line-length = 120

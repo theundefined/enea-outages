@@ -11,10 +11,26 @@ VERSION_BUMP_TYPE="patch" # Can be major, minor, patch
 # Function to display usage
 usage() {
   echo "Usage: $0 [major|minor|patch|vX.Y.Z]"
-  echo "  Automatically bumps the version, creates a git tag, and pushes it."
+  echo "  Calculates the next version, creates a git tag, and pushes it."
+  echo "  The package version is derived from the tag at build time."
   echo "  If a version is specified (vX.Y.Z), it will use that exact version."
   exit 1
 }
+
+# --- Main script ---
+
+# Ensure we are on the main branch and it's clean
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
+  echo "Error: Not on the main branch. Please switch to main before releasing."
+  exit 1
+fi
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Error: Working directory is not clean. Please commit or stash your changes."
+  exit 1
+fi
+
+echo "Updating local repository..."
+git pull origin main
 
 # Parse arguments
 if [ "$#" -eq 1 ]; then
@@ -34,10 +50,10 @@ echo "Fetching latest tags..."
 git fetch origin --tags
 
 # Get the latest version tag
-LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "$DEFAULT_INITIAL_VERSION")
+LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "")
 
-# If no semantic version tags exist, start with the default initial version and assume 0.0.0 for first bump
-if [ "$LAST_TAG" = "$DEFAULT_INITIAL_VERSION" ] && [ "$(git tag --list "$DEFAULT_INITIAL_VERSION")" = "" ]; then
+# If no semantic version tags exist, start with the default initial version
+if [ -z "$LAST_TAG" ]; then
     echo "No semantic version tags found. Starting with $DEFAULT_INITIAL_VERSION."
     CURRENT_VERSION_SEMVER="0.0.0" # Base for first bump
 else
