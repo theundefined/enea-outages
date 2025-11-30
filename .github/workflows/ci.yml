@@ -62,15 +62,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-          
-      - name: Install poetry
-        run: pip install poetry
-          
-      - name: Install dependencies
-        run: poetry install --only main # Install only main dependencies for building
 
       - name: Build package
-        run: poetry build # Build the wheel and sdist
+        run: hatch build
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
