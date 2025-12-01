@@ -39,28 +39,27 @@ async def main():
     print("\n" + "=" * 50 + "\n")
 
     print("--- Asynchronous Client Example ---")
-    async_client = AsyncEneaOutagesClient()
+    async with AsyncEneaOutagesClient() as async_client:
+        # Get available regions
+        print("\nFetching available regions (asynchronously)...")
+        async_regions = await async_client.get_available_regions()
+        print(f"Found {len(async_regions)} regions: {async_regions}")
 
-    # Get available regions
-    print("\nFetching available regions (asynchronously)...")
-    async_regions = await async_client.get_available_regions()
-    print(f"Found {len(async_regions)} regions: {async_regions}")
+        # Get all PLANNED outages for a region
+        print("\nFetching all PLANNED outages for Poznań (asynchronously)...")
+        async_planned_outages = await async_client.get_outages_for_region("Poznań", outage_type=OutageType.PLANNED)
+        if async_planned_outages:
+            print(f"Found {len(async_planned_outages)} PLANNED outage(s) in Poznań.")
+        else:
+            print("No PLANNED outages found in Poznań.")
 
-    # Get all PLANNED outages for a region
-    print("\nFetching all PLANNED outages for Poznań (asynchronously)...")
-    async_planned_outages = await async_client.get_outages_for_region("Poznań", outage_type=OutageType.PLANNED)
-    if async_planned_outages:
-        print(f"Found {len(async_planned_outages)} PLANNED outage(s) in Poznań.")
-    else:
-        print("No PLANNED outages found in Poznań.")
-
-    # Get all UNPLANNED outages for a region
-    print("\nFetching all UNPLANNED outages for Poznań (asynchronously)...")
-    async_unplanned_outages = await async_client.get_outages_for_region("Poznań", outage_type=OutageType.UNPLANNED)
-    if async_unplanned_outages:
-        print(f"Found {len(async_unplanned_outages)} UNPLANNED outage(s) in Poznań.")
-    else:
-        print("No UNPLANNED outages found in Poznań.")
+        # Get all UNPLANNED outages for a region
+        print("\nFetching all UNPLANNED outages for Poznań (asynchronously)...")
+        async_unplanned_outages = await async_client.get_outages_for_region("Poznań", outage_type=OutageType.UNPLANNED)
+        if async_unplanned_outages:
+            print(f"Found {len(async_unplanned_outages)} UNPLANNED outage(s) in Poznań.")
+        else:
+            print("No UNPLANNED outages found in Poznań.")
 
 
 if __name__ == "__main__":

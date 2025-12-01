@@ -146,16 +146,91 @@ class EneaOutagesClient:
         ]
 
 
-class AsyncEneaOutagesClient(EneaOutagesClient):
+class AsyncEneaOutagesClient:
     """Asynchronous client for Enea Operator power outages."""
 
+    BASE_URL = "https://wylaczenia-eneaoperator.pl/index.php"
+    MONTH_MAP = {
+        "stycznia": 1,
+        "lutego": 2,
+        "marca": 3,
+        "kwietnia": 4,
+        "maja": 5,
+        "czerwca": 6,
+        "lipca": 7,
+        "sierpnia": 8,
+        "września": 9,
+        "października": 10,
+        "listopada": 11,
+        "grudnia": 12,
+    }
+
+    def __init__(self, client: httpx.AsyncClient | None = None):
+        """Initialize the async client."""
+        self._client = client or httpx.AsyncClient()
+        self._external_client = client is not None
+
+    async def __aenter__(self):
+        """Enter the async context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the async context manager."""
+        if not self._external_client:
+            await self._client.aclose()
+
+    def _parse_date_formats(self, date_info: str) -> Tuple[datetime | None, datetime | None]:
+        """
+        Parses different date formats and returns a tuple of (start_time, end_time).
+        """
+        # Planned outage format: "8 grudnia 2025 r. w godz. 08:00 - 16:00"
+        planned_match = re.search(
+            r"(\d{1,2})\s+(\w+)\s+(\d{4})\s+r\.\s+w\s+godz\.\s+(\d{1,2}):(\d{2})\s+-\s+(\d{1,2}):(\d{2})", date_info
+        )
+        if planned_match:
+            day, month_name, year, start_hour, start_min, end_hour, end_min = planned_match.groups()
+            month = self.MONTH_MAP.get(month_name.lower())
+            if not month:
+                raise ValueError(f"Unknown month name: {month_name}")
+
+            start_time = datetime(int(year), month, int(day), int(start_hour), int(start_min))
+            end_time = datetime(int(year), month, int(day), int(end_hour), int(end_min))
+            return start_time, end_time
+
+        # Unplanned outage format: "19 listopada 2025 r. do godziny 12:30"
+        unplanned_match = re.search(r"(\d{1,2})\s+(\w+)\s+(\d{4})\s+r\.\s+do\s+godziny\s+(\d{1,2}):(\d{2})", date_info)
+        if unplanned_match:
+            day, month_name, year, hour, minute = unplanned_match.groups()
+            month = self.MONTH_MAP.get(month_name.lower())
+            if not month:
+                raise ValueError(f"Unknown month name: {month_name}")
+
+            # For unplanned, we only have an end time. Start time is unknown.
+            end_time = datetime(int(year), month, int(day), int(hour), int(minute))
+            return None, end_time
+
+        raise ValueError(f"Could not parse date information: {date_info}")
+
+    def _parse_outage_block(self, block: BeautifulSoup) -> Outage:
+        """Parses a single outage HTML block into an Outage object."""
+        region_tag = block.find("h4", {"class": "title_"})
+        description_tag = block.find("p", {"class": "description"})
+        date_info_tag = block.find("p", {"class": "bold subtext"})
+
+        region = region_tag.get_text(strip=True) if region_tag else "Nieznany obszar"
+        description = description_tag.get_text(strip=True) if description_tag else "Brak opisu"
+        date_info_str = date_info_tag.get_text(strip=True) if date_info_tag else ""
+
+        start_time, end_time = self._parse_date_formats(date_info_str)
+
+        return Outage(region=region, description=description, start_time=start_time, end_time=end_time)
+        
     async def _fetch_raw_html(self, region: str, outage_type: OutageType) -> str:
         """Fetches the raw HTML content asynchronously."""
-        async with httpx.AsyncClient() as client:
-            params = {"page": outage_type.value, "oddzial": region}
-            response = await client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
-            return response.text
+        params = {"page": outage_type.value, "oddzial": region}
+        response = await self._client.get(self.BASE_URL, params=params)
+        response.raise_for_status()
+        return response.text
 
     async def get_outages_for_region(
         self, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
