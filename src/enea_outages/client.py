@@ -165,18 +165,18 @@ class AsyncEneaOutagesClient:
         "grudnia": 12,
     }
 
-    def __init__(self, client: httpx.AsyncClient | None = None):
+    def __init__(self):
         """Initialize the async client."""
-        self._client = client or httpx.AsyncClient()
-        self._external_client = client is not None
+        self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self):
         """Enter the async context manager."""
+        self._client = httpx.AsyncClient()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context manager."""
-        if not self._external_client:
+        if self._client:
             await self._client.aclose()
 
     def _parse_date_formats(self, date_info: str) -> Tuple[datetime | None, datetime | None]:
