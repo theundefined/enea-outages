@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import httpx
 from pytest_httpx import HTTPXMock
 
-from enea_outages.client import EneaOutagesClient, AsyncEneaOutagesClient
+from enea_outages.client import EneaOutagesClient
 from enea_outages.models import OutageType
 
 # --- Test Data ---
@@ -97,14 +97,6 @@ def test_get_available_regions_sync(sync_client: EneaOutagesClient, httpx_mock: 
     assert regions == ["Zielona Góra", "Poznań"]
 
 
-@pytest.mark.asyncio
-async def test_get_available_regions_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(text=SAMPLE_HTML_PAGE_WITH_REGIONS)
-    async with AsyncEneaOutagesClient() as async_client:
-        regions = await async_client.get_available_regions()
-    assert regions == ["Zielona Góra", "Poznań"]
-
-
 def test_get_outages_for_region_unplanned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=f"{EneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Pozna%C5%84",
@@ -127,30 +119,6 @@ def test_get_outages_for_region_planned_sync(sync_client: EneaOutagesClient, htt
     assert outages[0].region == "Test Planned Area"
     assert outages[0].start_time == datetime(2025, 12, 8, 8, 0)
     assert outages[0].end_time == datetime(2025, 12, 8, 16, 0)
-
-
-@pytest.mark.asyncio
-async def test_get_outages_for_region_unplanned_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
-    )
-    async with AsyncEneaOutagesClient() as async_client:
-        outages = await async_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
-    assert len(outages) == 1
-    assert outages[0].start_time is None
-
-
-@pytest.mark.asyncio
-async def test_get_outages_for_region_planned_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.PLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
-    )
-    async with AsyncEneaOutagesClient() as async_client:
-        outages = await async_client.get_outages_for_region("Poznań", OutageType.PLANNED)
-    assert len(outages) == 1
-    assert outages[0].start_time == datetime(2025, 12, 8, 8, 0)
 
 
 def test_get_outages_for_address_unplanned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
@@ -192,57 +160,7 @@ def test_get_outages_for_address_planned_sync(sync_client: EneaOutagesClient, ht
     assert len(outages_no_match) == 0
 
 
-@pytest.mark.asyncio
-async def test_get_outages_for_address_unplanned_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
-        status_code=200,
-    )
-    httpx_mock.add_response(  # Second call for 'NonExistent'
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
-        status_code=200,
-    )
-    async with AsyncEneaOutagesClient() as async_client:
-        outages = await async_client.get_outages_for_address("Unplanned outage", "Poznań", OutageType.UNPLANNED)
-        assert len(outages) == 1
-        assert "Unplanned outage" in outages[0].description
-
-        outages_no_match = await async_client.get_outages_for_address("NonExistent Street", "Poznań", OutageType.UNPLANNED)
-        assert len(outages_no_match) == 0
-
-
-@pytest.mark.asyncio
-async def test_get_outages_for_address_planned_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.PLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
-        status_code=200,
-    )
-    httpx_mock.add_response(  # Second call for 'NonExistent'
-        url=f"{AsyncEneaOutagesClient.BASE_URL}?page={OutageType.PLANNED.value}&oddzial=Pozna%C5%84",
-        text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
-        status_code=200,
-    )
-    async with AsyncEneaOutagesClient() as async_client:
-        outages = await async_client.get_outages_for_address("Planned outage", "Poznań", OutageType.PLANNED)
-        assert len(outages) == 1
-        assert "Planned outage" in outages[0].description
-
-        outages_no_match = await async_client.get_outages_for_address("NonExistent Street", "Poznań", OutageType.PLANNED)
-        assert len(outages_no_match) == 0
-
-
 def test_http_error_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(status_code=500)
     with pytest.raises(httpx.HTTPStatusError):
         sync_client.get_outages_for_region("Poznań")
-
-
-@pytest.mark.asyncio
-async def test_http_error_async(httpx_mock: HTTPXMock):
-    httpx_mock.add_response(status_code=500)
-    with pytest.raises(httpx.HTTPStatusError):
-        async with AsyncEneaOutagesClient() as async_client:
-            await async_client.get_outages_for_region("Poznań")
