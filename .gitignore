@@ -37,3 +37,5 @@ venv/
 # coverage
 coverage.xml
 .coverage
+PROJECT_STATE.md
+tmp/
