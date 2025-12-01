@@ -6,7 +6,7 @@ except PackageNotFoundError:
     # Fallback for when the package is not installed (e.g., in development)
     __version__ = "0.0.0-dev"
 
-from .client import EneaOutagesClient, AsyncEneaOutagesClient
+from .client import EneaOutagesClient
 from .models import Outage
 
-__all__ = ["EneaOutagesClient", "AsyncEneaOutagesClient", "Outage"]
+__all__ = ["EneaOutagesClient", "Outage"]

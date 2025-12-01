@@ -1,12 +1,11 @@
 import argparse
-import asyncio
 
-from .client import AsyncEneaOutagesClient
+from .client import EneaOutagesClient
 from .models import OutageType
 
 
-async def async_main():
-    """Asynchronous main function to handle CLI logic."""
+def run_cli_logic():
+    """Main function to handle CLI logic."""
     parser = argparse.ArgumentParser(description="Enea Outages CLI Tool")
     parser.add_argument(
         "--type",
@@ -31,12 +30,12 @@ async def async_main():
     args = parser.parse_args()
 
     outage_type = OutageType[args.type.upper()]
-    client = AsyncEneaOutagesClient()
+    client = EneaOutagesClient()
 
     if args.list_regions:
         print("Fetching available regions...")
         try:
-            regions = await client.get_available_regions()
+            regions = client.get_available_regions()
             if regions:
                 print("Available regions:")
                 for region in regions:
@@ -51,9 +50,9 @@ async def async_main():
     try:
         if args.address:
             print(f"Filtering for address: {args.address}")
-            outages = await client.get_outages_for_address(args.address, args.region, outage_type)
+            outages = client.get_outages_for_address(args.address, args.region, outage_type)
         else:
-            outages = await client.get_outages_for_region(args.region, outage_type)
+            outages = client.get_outages_for_region(args.region, outage_type)
 
         if not outages:
             print("No outages found for the specified criteria.")
@@ -75,9 +74,9 @@ async def async_main():
 
 
 def main():
-    """Synchronous wrapper for the async main function."""
+    """Main entry point for the CLI."""
     try:
-        asyncio.run(async_main())
+        run_cli_logic()
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
 
