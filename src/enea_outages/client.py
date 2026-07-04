@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Tuple
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from .models import Outage, OutageType
 
@@ -13,7 +13,7 @@ from .models import Outage, OutageType
 class EneaOutagesClient:
     """Synchronous client for Enea Operator power outages."""
 
-    BASE_URL = "https://wylaczenia-eneaoperator.pl/index.php"
+    BASE_URL = "https://wylaczenia.operator.enea.pl/index.php"
     MONTH_MAP = {
         "stycznia": 1,
         "lutego": 2,
@@ -136,7 +136,7 @@ class EneaOutagesClient:
         soup = BeautifulSoup(html, "html.parser")
 
         region_select = soup.find("select", {"id": "oddzial"})
-        if not region_select:
+        if not isinstance(region_select, Tag):
             return []
 
         return [
