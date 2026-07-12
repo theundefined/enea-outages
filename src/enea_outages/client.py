@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
+from types import TracebackType
 from typing import Tuple
 
 import httpx
@@ -9,11 +11,14 @@ from bs4 import BeautifulSoup, Tag
 
 from .models import Outage, OutageType
 
+logger = logging.getLogger(__name__)
+
 
 class EneaOutagesClient:
     """Synchronous client for Enea Operator power outages."""
 
     BASE_URL = "https://wylaczenia.operator.enea.pl/index.php"
+    DEFAULT_TIMEOUT = 10.0
     MONTH_MAP = {
         "stycznia": 1,
         "lutego": 2,
@@ -28,6 +33,24 @@ class EneaOutagesClient:
         "listopada": 11,
         "grudnia": 12,
     }
+
+    def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
+        self._client = httpx.Client(timeout=timeout)
+
+    def close(self) -> None:
+        """Closes the underlying HTTP connection pool."""
+        self._client.close()
+
+    def __enter__(self) -> EneaOutagesClient:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
 
     def _parse_date_formats(self, date_info: str) -> Tuple[datetime | None, datetime | None]:
         """
@@ -78,7 +101,7 @@ class EneaOutagesClient:
     def _fetch_raw_html(self, region: str, outage_type: OutageType) -> str:
         """Fetches the raw HTML content for a given region and outage type."""
         params = {"page": outage_type.value, "oddzial": region}
-        response = httpx.get(self.BASE_URL, params=params)
+        response = self._client.get(self.BASE_URL, params=params)
         response.raise_for_status()
         return response.text
 
@@ -104,7 +127,7 @@ class EneaOutagesClient:
             try:
                 outages.append(self._parse_outage_block(block))
             except (ValueError, AttributeError) as e:
-                print(f"Error parsing outage block: {e}")
+                logger.warning("Error parsing outage block: %s", e)
         return outages
 
     def get_outages_for_address(

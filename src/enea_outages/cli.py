@@ -30,47 +30,47 @@ def run_cli_logic():
     args = parser.parse_args()
 
     outage_type = OutageType[args.type.upper()]
-    client = EneaOutagesClient()
 
-    if args.list_regions:
-        print("Fetching available regions...")
-        try:
-            regions = client.get_available_regions()
-            if regions:
-                print("Available regions:")
-                for region in regions:
-                    print(f"- {region}")
-            else:
-                print("Could not retrieve regions.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-        return
-
-    print(f"Fetching {args.type} outages for region: {args.region}...")
-    try:
-        if args.address:
-            print(f"Filtering for address: {args.address}")
-            outages = client.get_outages_for_address(args.address, args.region, outage_type)
-        else:
-            outages = client.get_outages_for_region(args.region, outage_type)
-
-        if not outages:
-            print("No outages found for the specified criteria.")
+    with EneaOutagesClient() as client:
+        if args.list_regions:
+            print("Fetching available regions...")
+            try:
+                regions = client.get_available_regions()
+                if regions:
+                    print("Available regions:")
+                    for region in regions:
+                        print(f"- {region}")
+                else:
+                    print("Could not retrieve regions.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
             return
 
-        print(f"\nFound {len(outages)} outage notice(s):")
-        for outage in outages:
-            print("-" * 40)
-            print(f"  Obszar: {outage.region}")
-            print(f"  Opis: {outage.description}")
-            if outage.start_time:
-                print(f"  Początek: {outage.start_time.strftime('%Y-%m-%d %H:%M')}")
-            if outage.end_time:
-                print(f"  Koniec:   {outage.end_time.strftime('%Y-%m-%d %H:%M')}")
-        print("-" * 40)
+        print(f"Fetching {args.type} outages for region: {args.region}...")
+        try:
+            if args.address:
+                print(f"Filtering for address: {args.address}")
+                outages = client.get_outages_for_address(args.address, args.region, outage_type)
+            else:
+                outages = client.get_outages_for_region(args.region, outage_type)
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+            if not outages:
+                print("No outages found for the specified criteria.")
+                return
+
+            print(f"\nFound {len(outages)} outage notice(s):")
+            for outage in outages:
+                print("-" * 40)
+                print(f"  Obszar: {outage.region}")
+                print(f"  Opis: {outage.description}")
+                if outage.start_time:
+                    print(f"  Początek: {outage.start_time.strftime('%Y-%m-%d %H:%M')}")
+                if outage.end_time:
+                    print(f"  Koniec:   {outage.end_time.strftime('%Y-%m-%d %H:%M')}")
+            print("-" * 40)
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
 
 def main():

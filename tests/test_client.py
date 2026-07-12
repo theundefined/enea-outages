@@ -164,3 +164,67 @@ def test_http_error_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(status_code=500)
     with pytest.raises(httpx.HTTPStatusError):
         sync_client.get_outages_for_region("Poznań")
+
+
+# --- Edge Case Tests ---
+
+
+def test_parse_date_format_unknown_month_planned(sync_client: EneaOutagesClient):
+    date_str = "8 marsjanina 2025 r. w godz. 08:00 - 16:00"
+    with pytest.raises(ValueError, match="Unknown month name"):
+        sync_client._parse_date_formats(date_str)
+
+
+def test_parse_date_format_unknown_month_unplanned(sync_client: EneaOutagesClient):
+    date_str = "19 marsjanina 2025 r. do godziny 12:30"
+    with pytest.raises(ValueError, match="Unknown month name"):
+        sync_client._parse_date_formats(date_str)
+
+
+def test_get_outages_for_region_skips_unparseable_block(
+    sync_client: EneaOutagesClient, httpx_mock: HTTPXMock, caplog: pytest.LogCaptureFixture
+):
+    unparseable_block = """
+    <div class="unpl block info">
+        <h4 class="title_">Broken Block</h4>
+        <p class="bold subtext">not a date at all</p>
+        <p class="description">Broken description.</p>
+    </div>
+    """
+    httpx_mock.add_response(
+        text=f"<html><body>{unparseable_block}{SAMPLE_UNPLANNED_BLOCK}</body></html>",
+    )
+    with caplog.at_level("WARNING"):
+        outages = sync_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
+
+    assert len(outages) == 1
+    assert outages[0].region == "Test Unplanned Area"
+    assert "Error parsing outage block" in caplog.text
+
+
+def test_get_outages_for_region_skips_block_raising_attribute_error(
+    sync_client: EneaOutagesClient,
+    httpx_mock: HTTPXMock,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    httpx_mock.add_response(
+        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
+    )
+
+    def raise_attribute_error(self, block):
+        raise AttributeError("simulated malformed block")
+
+    monkeypatch.setattr(EneaOutagesClient, "_parse_outage_block", raise_attribute_error)
+
+    with caplog.at_level("WARNING"):
+        outages = sync_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
+
+    assert outages == []
+    assert "Error parsing outage block" in caplog.text
+
+
+def test_get_available_regions_no_select_tag(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(text="<html><body><p>No region selector here.</p></body></html>")
+    regions = sync_client.get_available_regions()
+    assert regions == []
