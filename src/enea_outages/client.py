@@ -98,27 +98,55 @@ class EneaOutagesClient:
 
         return Outage(region=region, description=description, start_time=start_time, end_time=end_time)
 
-    def _fetch_raw_html(self, region: str, outage_type: OutageType) -> str:
-        """Fetches the raw HTML content for a given region and outage type."""
-        params = {"page": outage_type.value, "oddzial": region}
-        response = self._client.get(self.BASE_URL, params=params)
+    def _fetch_raw_html(
+        self,
+        department: str,
+        outage_type: OutageType,
+        area: str | None = None,
+        city: str | None = None,
+        street: str | None = None,
+    ) -> str:
+        """Fetches the raw HTML content for a given department, area, city and street."""
+        payload: dict[str, str] = {"page": outage_type.value, "oddzial": department}
+        if area:
+            payload["rejon"] = area
+
+        if city or street:
+            # The site only applies city/street filtering on a POST submission using these
+            # exact field names; as GET query params (or under other names) they're ignored.
+            if city:
+                payload["unpl_city"] = city
+            if street:
+                payload["unpl_street"] = street
+            response = self._client.post(self.BASE_URL, data=payload)
+        else:
+            response = self._client.get(self.BASE_URL, params=payload)
+
         response.raise_for_status()
         return response.text
 
-    def get_outages_for_region(
-        self, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    def get_outages_for_department(
+        self,
+        department: str = "Poznań",
+        outage_type: OutageType = OutageType.UNPLANNED,
+        area: str | None = None,
+        city: str | None = None,
+        street: str | None = None,
     ) -> list[Outage]:
         """
-        Retrieves power outages for a specified region and type.
+        Retrieves power outages for a specified department and type.
 
         Args:
-            region: The name of the Enea Operator branch (e.g., "Poznań").
+            department: The name of the Enea Operator branch (e.g., "Poznań").
             outage_type: The type of outage to fetch (PLANNED or UNPLANNED).
+            area: Optional sub-district id (only meaningful for some departments, e.g. Poznań).
+            city: Optional city/town name ("miejscowość") to narrow the search.
+            street: Optional street name ("ulica") to narrow the search.
 
         Returns:
             A list of Outage objects.
         """
-        html = self._fetch_raw_html(region, outage_type)
+        html = self._fetch_raw_html(department, outage_type, area=area, city=city, street=street)
         soup = BeautifulSoup(html, "html.parser")
         outage_blocks = soup.find_all("div", {"class": "unpl block info"})
 
@@ -130,40 +158,71 @@ class EneaOutagesClient:
                 logger.warning("Error parsing outage block: %s", e)
         return outages
 
+
     def get_outages_for_address(
-        self, address: str, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+        self, address: str, department: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
     ) -> list[Outage]:
         """
         Retrieves power outages affecting a specific address.
 
         Args:
             address: The specific street or address to check.
-            region: The name of the Enea Operator branch.
+            department: The name of the Enea Operator branch.
             outage_type: The type of outage to fetch.
 
         Returns:
             A list of Outage objects relevant to the given address.
         """
-        all_outages = self.get_outages_for_region(region, outage_type)
+        all_outages = self.get_outages_for_department(department, outage_type)
         return [o for o in all_outages if address.lower() in o.description.lower()]
 
-    def get_available_regions(self) -> list[str]:
+    def get_available_departments(self) -> list[str]:
         """
-        Retrieves the list of available regions (oddziały) from the Enea website.
+        Retrieves the list of available departments (oddziały) from the Enea website.
 
         Returns:
-            A list of available region names.
+            A list of available department names.
         """
-        # The list of regions is the same for all page types, so we can hardcode one.
-        html = self._fetch_raw_html(region="Poznań", outage_type=OutageType.PLANNED)
+        # The list of departments is the same for all page types, so we can hardcode one.
+        html = self._fetch_raw_html(department="Poznań", outage_type=OutageType.PLANNED)
         soup = BeautifulSoup(html, "html.parser")
 
-        region_select = soup.find("select", {"id": "oddzial"})
-        if not isinstance(region_select, Tag):
+        department_select = soup.find("select", {"id": "oddzial"})
+        if not isinstance(department_select, Tag):
             return []
 
         return [
             option["value"]
-            for option in region_select.find_all("option")
+            for option in department_select.find_all("option")
             if option.has_attr("value") and option["value"]
         ]
+
+    def get_available_areas(
+        self, department: str, outage_type: OutageType = OutageType.PLANNED
+    ) -> dict[str, str]:
+        """
+        Retrieves the available sub-districts ("rejony") for a given department (oddział).
+
+        The site renders a `<select id="rejon">` populated server-side based on the
+        `oddzial` query param, so the returned options differ per department.
+
+        Args:
+            department: The name of the Enea Operator branch (e.g., "Poznań").
+            outage_type: The page type to fetch the select from (either works).
+
+        Returns:
+            A dict mapping area id to its display name, e.g. {"12": "Opalenica"}.
+        """
+        html = self._fetch_raw_html(department=department, outage_type=outage_type)
+        soup = BeautifulSoup(html, "html.parser")
+
+        area_select = soup.find("select", {"id": "rejon"})
+        if not isinstance(area_select, Tag):
+            return {}
+
+        return {
+            option["value"]: option.get_text(strip=True)
+            for option in area_select.find_all("option")
+            if option.has_attr("value") and option["value"]
+        }
+
