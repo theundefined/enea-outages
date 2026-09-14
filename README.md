@@ -34,7 +34,7 @@ narrowed_outages = client.get_outages_for_department(
     "Poznań",
     outage_type=OutageType.PLANNED,
     area="12",  # Opalenica
-    city="Komorniki",
+    city="Poznań",
     street="Kwiatowa",
 )
 print(f"Found {len(narrowed_outages)} planned outages for the given location.")
