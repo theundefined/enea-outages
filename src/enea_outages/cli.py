@@ -14,45 +14,86 @@ def run_cli_logic():
         help="Specify the type of outage to fetch. Default is 'unplanned'.",
     )
     parser.add_argument(
-        "--list-regions",
+        "--list-departments",
         action="store_true",
-        help="List all available regions (oddziały) and exit.",
+        help="List all available departments (oddziały) and exit.",
     )
     parser.add_argument(
-        "--region",
+        "--list-areas",
+        action="store_true",
+        help="List available sub-districts (rejony) for --department and exit.",
+    )
+    parser.add_argument(
+        "--department",
         default="Poznań",
-        help="Specify the region to check for outages. Default is 'Poznań'.",
+        help="Specify the department to check for outages. Default is 'Poznań'.",
+    )
+    parser.add_argument(
+        "--area",
+        help="Specify a sub-district id or name for --department (see --list-areas).",
+    )
+    parser.add_argument(
+        "--city",
+        help="Specify a city/town ('miejscowość') to narrow the search.",
+    )
+    parser.add_argument(
+        "--street",
+        help="Specify a street ('ulica') to narrow the search.",
     )
     parser.add_argument(
         "--address",
-        help="Specify a street address to filter outages. Requires --region.",
+        help="Specify a street address to filter outages. Requires --department.",
     )
     args = parser.parse_args()
 
     outage_type = OutageType[args.type.upper()]
 
     with EneaOutagesClient() as client:
-        if args.list_regions:
-            print("Fetching available regions...")
+        if args.list_departments:
+            print("Fetching available departments...")
             try:
-                regions = client.get_available_regions()
-                if regions:
-                    print("Available regions:")
-                    for region in regions:
-                        print(f"- {region}")
+                departments = client.get_available_departments()
+                if departments:
+                    print("Available departments:")
+                    for department in departments:
+                        print(f"- {department}")
                 else:
-                    print("Could not retrieve regions.")
+                    print("Could not retrieve departments.")
             except Exception as e:
                 print(f"An error occurred: {e}")
             return
 
-        print(f"Fetching {args.type} outages for region: {args.region}...")
+        if args.list_areas:
+            print(f"Fetching available areas for department: {args.department}...")
+            try:
+                areas = client.get_available_areas(args.department)
+                if areas:
+                    print("Available areas:")
+                    for area_id, name in areas.items():
+                        print(f"- {area_id}: {name}")
+                else:
+                    print("Could not retrieve areas for this department.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+            return
+
+        area_id = None
+        if args.area:
+            try:
+                area_id = _resolve_area_id(client, args.department, args.area)
+            except ValueError as e:
+                print(f"An error occurred: {e}")
+                return
+
+        print(f"Fetching {args.type} outages for department: {args.department}...")
         try:
             if args.address:
                 print(f"Filtering for address: {args.address}")
-                outages = client.get_outages_for_address(args.address, args.region, outage_type)
+                outages = client.get_outages_for_address(args.address, args.department, outage_type)
             else:
-                outages = client.get_outages_for_region(args.region, outage_type)
+                outages = client.get_outages_for_department(
+                    args.department, outage_type, area=area_id, city=args.city, street=args.street
+                )
 
             if not outages:
                 print("No outages found for the specified criteria.")
@@ -71,6 +112,20 @@ def run_cli_logic():
 
         except Exception as e:
             print(f"An error occurred: {e}")
+
+
+def _resolve_area_id(client: EneaOutagesClient, department: str, area: str) -> str:
+    """Resolves an area given as either its numeric id or its display name to an id."""
+    areas = client.get_available_areas(department)
+    if area in areas:
+        return area
+
+    normalized = area.strip().lower()
+    for area_id, name in areas.items():
+        if name.lower() == normalized:
+            return area_id
+
+    raise ValueError(f"Unknown area {area!r} for department {department!r}. Known values: {areas}")
 
 
 def main():
