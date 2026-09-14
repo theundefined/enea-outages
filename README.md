@@ -17,18 +17,32 @@ from enea_outages.models import OutageType
 # Initialize the synchronous client
 client = EneaOutagesClient()
 
-# Get a list of available regions
-regions = client.get_available_regions()
-print(f"Available regions: {regions}")
+# Get a list of available departments
+departments = client.get_available_departments()
+print(f"Available departments: {departments}")
 
-# Get all planned outages for the "Poznań" region
-planned_outages = client.get_outages_for_region("Poznań", outage_type=OutageType.PLANNED)
+# Get the available areas (rejony/sub-districts) for a given department
+areas = client.get_available_areas("Poznań")
+print(f"Available areas for Poznań: {areas}")  # e.g. {"12": "Opalenica", ...}
+
+# Get all planned outages for the "Poznań" department
+planned_outages = client.get_outages_for_department("Poznań", outage_type=OutageType.PLANNED)
 print(f"Found {len(planned_outages)} planned outages in Poznań.")
+
+# Narrow the search down to an area (sub-district id), city and/or street
+narrowed_outages = client.get_outages_for_department(
+    "Poznań",
+    outage_type=OutageType.PLANNED,
+    area="12",  # Opalenica
+    city="Komorniki",
+    street="Kwiatowa",
+)
+print(f"Found {len(narrowed_outages)} planned outages for the given location.")
 
 # Get all unplanned outages for a specific address in "Szczecin"
 unplanned_outages = client.get_outages_for_address(
     address="Wojska Polskiego",
-    region="Szczecin",
+    department="Szczecin",
     outage_type=OutageType.UNPLANNED
 )
 print(f"Found {len(unplanned_outages)} unplanned outages for the address.")
@@ -47,14 +61,20 @@ if unplanned_outages:
 The library also provides a command-line interface (CLI) for quick checks.
 
 ```bash
-# List all available regions
-enea-outages --list-regions
+# List all available departments
+enea-outages --list-departments
 
-# Get unplanned outages for a specific region
-enea-outages --region "Poznań" --type unplanned
+# List available areas (sub-districts) for a department
+enea-outages --department "Poznań" --list-areas
 
-# Get planned outages for a specific address in a region
-enea-outages --region "Szczecin" --address "Wojska Polskiego" --type planned
+# Get unplanned outages for a specific department
+enea-outages --department "Poznań" --type unplanned
+
+# Narrow the search down to an area (by name or numeric id), city and/or street
+enea-outages --department "Poznań" --area "Opalenica" --city "Komorniki" --street "Kwiatowa"
+
+# Get planned outages for a specific address in a department
+enea-outages --department "Szczecin" --address "Wojska Polskiego" --type planned
 ```
 
 ---
