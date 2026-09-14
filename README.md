@@ -71,7 +71,7 @@ enea-outages --department "Poznań" --list-areas
 enea-outages --department "Poznań" --type unplanned
 
 # Narrow the search down to an area (by name or numeric id), city and/or street
-enea-outages --department "Poznań" --area "Opalenica" --city "Komorniki" --street "Kwiatowa"
+enea-outages --department "Poznań" --area "Opalenica" --city "Poznań" --street "Kwiatowa"
 
 # Get planned outages for a specific address in a department
 enea-outages --department "Szczecin" --address "Wojska Polskiego" --type planned
