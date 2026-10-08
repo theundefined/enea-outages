@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from datetime import datetime
 from types import TracebackType
 from typing import Tuple
@@ -107,6 +108,10 @@ class EneaOutagesClient:
         street: str | None = None,
     ) -> str:
         """Fetches the raw HTML content for a given department, area, city and street."""
+        # The site remembers the last selected area ("rejon") in the PHP session and keeps
+        # applying it to later searches, so drop cookies to make every request independent.
+        self._client.cookies.clear()
+
         payload: dict[str, str] = {"page": outage_type.value, "oddzial": department}
         if area:
             payload["rejon"] = area
@@ -158,9 +163,13 @@ class EneaOutagesClient:
                 logger.warning("Error parsing outage block: %s", e)
         return outages
 
-
     def get_outages_for_address(
-        self, address: str, department: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+        self,
+        address: str,
+        department: str = "Poznań",
+        outage_type: OutageType = OutageType.UNPLANNED,
+        *,
+        region: str | None = None,
     ) -> list[Outage]:
         """
         Retrieves power outages affecting a specific address.
@@ -169,10 +178,14 @@ class EneaOutagesClient:
             address: The specific street or address to check.
             department: The name of the Enea Operator branch.
             outage_type: The type of outage to fetch.
+            region: Deprecated alias for `department`.
 
         Returns:
             A list of Outage objects relevant to the given address.
         """
+        if region is not None:
+            _warn_deprecated("region", "department")
+            department = region
         all_outages = self.get_outages_for_department(department, outage_type)
         return [o for o in all_outages if address.lower() in o.description.lower()]
 
@@ -197,9 +210,19 @@ class EneaOutagesClient:
             if option.has_attr("value") and option["value"]
         ]
 
-    def get_available_areas(
-        self, department: str, outage_type: OutageType = OutageType.PLANNED
-    ) -> dict[str, str]:
+    def get_outages_for_region(
+        self, region: str = "Poznań", outage_type: OutageType = OutageType.UNPLANNED
+    ) -> list[Outage]:
+        """Deprecated alias for `get_outages_for_department`."""
+        _warn_deprecated("get_outages_for_region", "get_outages_for_department")
+        return self.get_outages_for_department(region, outage_type)
+
+    def get_available_regions(self) -> list[str]:
+        """Deprecated alias for `get_available_departments`."""
+        _warn_deprecated("get_available_regions", "get_available_departments")
+        return self.get_available_departments()
+
+    def get_available_areas(self, department: str, outage_type: OutageType = OutageType.PLANNED) -> dict[str, str]:
         """
         Retrieves the available sub-districts ("rejony") for a given department (oddział).
 
@@ -226,3 +249,6 @@ class EneaOutagesClient:
             if option.has_attr("value") and option["value"]
         }
 
+
+def _warn_deprecated(old: str, new: str) -> None:
+    warnings.warn(f"'{old}' is deprecated, use '{new}' instead.", DeprecationWarning, stacklevel=3)

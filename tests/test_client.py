@@ -1,7 +1,8 @@
-import pytest
 from datetime import datetime
-from bs4 import BeautifulSoup
+
 import httpx
+import pytest
+from bs4 import BeautifulSoup
 from pytest_httpx import HTTPXMock
 
 from enea_outages.client import EneaOutagesClient
@@ -121,9 +122,7 @@ def test_get_outages_for_department_planned_sync(sync_client: EneaOutagesClient,
     assert outages[0].end_time == datetime(2025, 12, 8, 16, 0)
 
 
-def test_get_outages_for_department_with_area_city_street_sync(
-    sync_client: EneaOutagesClient, httpx_mock: HTTPXMock
-):
+def test_get_outages_for_department_with_area_city_street_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         method="POST",
         url=EneaOutagesClient.BASE_URL,
@@ -265,3 +264,49 @@ def test_get_available_departments_no_select_tag(sync_client: EneaOutagesClient,
     httpx_mock.add_response(text="<html><body><p>No region selector here.</p></body></html>")
     departments = sync_client.get_available_departments()
     assert departments == []
+
+
+# --- Backward Compatibility Tests ---
+
+
+def test_get_outages_for_region_is_deprecated_alias(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{EneaOutagesClient.BASE_URL}?page={OutageType.PLANNED.value}&oddzial=Pozna%C5%84",
+        text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
+    )
+    with pytest.warns(DeprecationWarning, match="get_outages_for_department"):
+        outages = sync_client.get_outages_for_region(region="Poznań", outage_type=OutageType.PLANNED)
+    assert len(outages) == 1
+    assert outages[0].region == "Test Planned Area"
+
+
+def test_get_available_regions_is_deprecated_alias(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(text=SAMPLE_HTML_PAGE_WITH_REGIONS)
+    with pytest.warns(DeprecationWarning, match="get_available_departments"):
+        regions = sync_client.get_available_regions()
+    assert regions == ["Zielona Góra", "Poznań"]
+
+
+def test_get_outages_for_address_accepts_deprecated_region_kwarg(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{EneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Szczecin",
+        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
+    )
+    with pytest.warns(DeprecationWarning, match="department"):
+        outages = sync_client.get_outages_for_address("unplanned", region="Szczecin")
+    assert len(outages) == 1
+
+
+def test_session_cookies_do_not_leak_between_requests(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    # The site stores the selected area in the session; a later search must not inherit it.
+    httpx_mock.add_response(
+        headers={"Set-Cookie": "PHPSESSID=abc; Path=/"},
+        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
+    )
+    httpx_mock.add_response(text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>")
+
+    sync_client.get_outages_for_department("Poznań", area="8")
+    sync_client.get_outages_for_department("Poznań", city="Poznań")
+
+    second_request = httpx_mock.get_requests()[1]
+    assert "cookie" not in second_request.headers
