@@ -8,14 +8,14 @@ def main():
     print("--- Synchronous Client Example ---")
     sync_client = EneaOutagesClient()
 
-    # Get available regions
-    print("\nFetching available regions...")
-    regions = sync_client.get_available_regions()
-    print(f"Found {len(regions)} regions: {regions}")
+    # Get available departments
+    print("\nFetching available departments...")
+    departments = sync_client.get_available_departments()
+    print(f"Found {len(departments)} departments: {departments}")
 
-    # Get all PLANNED outages for a region
+    # Get all PLANNED outages for a department
     print("\nFetching all PLANNED outages for Poznań...")
-    planned_outages_sync = sync_client.get_outages_for_region("Poznań", outage_type=OutageType.PLANNED)
+    planned_outages_sync = sync_client.get_outages_for_department("Poznań", outage_type=OutageType.PLANNED)
     if planned_outages_sync:
         print(f"Found {len(planned_outages_sync)} PLANNED outage(s) in Poznań.")
         # Print details for the first one as an example
@@ -24,9 +24,9 @@ def main():
     else:
         print("No PLANNED outages found in Poznań.")
 
-    # Get all UNPLANNED outages for a region
+    # Get all UNPLANNED outages for a department
     print("\nFetching all UNPLANNED outages for Poznań...")
-    unplanned_outages_sync = sync_client.get_outages_for_region("Poznań", outage_type=OutageType.UNPLANNED)
+    unplanned_outages_sync = sync_client.get_outages_for_department("Poznań", outage_type=OutageType.UNPLANNED)
     if unplanned_outages_sync:
         print(f"Found {len(unplanned_outages_sync)} UNPLANNED outage(s) in Poznań.")
         outage = unplanned_outages_sync[0]

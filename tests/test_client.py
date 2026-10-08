@@ -91,34 +91,50 @@ def test_parse_outage_block_unplanned(sync_client: EneaOutagesClient):
 # --- Client Method Tests ---
 
 
-def test_get_available_regions_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+def test_get_available_departments_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(text=SAMPLE_HTML_PAGE_WITH_REGIONS)
-    regions = sync_client.get_available_regions()
-    assert regions == ["Zielona Góra", "Poznań"]
+    departments = sync_client.get_available_departments()
+    assert departments == ["Zielona Góra", "Poznań"]
 
 
-def test_get_outages_for_region_unplanned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+def test_get_outages_for_department_unplanned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=f"{EneaOutagesClient.BASE_URL}?page={OutageType.UNPLANNED.value}&oddzial=Pozna%C5%84",
         text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
     )
-    outages = sync_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
+    outages = sync_client.get_outages_for_department("Poznań", OutageType.UNPLANNED)
     assert len(outages) == 1
     assert outages[0].region == "Test Unplanned Area"
     assert outages[0].start_time is None
     assert outages[0].end_time == datetime(2025, 11, 29, 14, 30)
 
 
-def test_get_outages_for_region_planned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+def test_get_outages_for_department_planned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url=f"{EneaOutagesClient.BASE_URL}?page={OutageType.PLANNED.value}&oddzial=Pozna%C5%84",
         text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
     )
-    outages = sync_client.get_outages_for_region("Poznań", OutageType.PLANNED)
+    outages = sync_client.get_outages_for_department("Poznań", OutageType.PLANNED)
     assert len(outages) == 1
     assert outages[0].region == "Test Planned Area"
     assert outages[0].start_time == datetime(2025, 12, 8, 8, 0)
     assert outages[0].end_time == datetime(2025, 12, 8, 16, 0)
+
+
+def test_get_outages_for_department_with_area_city_street_sync(
+    sync_client: EneaOutagesClient, httpx_mock: HTTPXMock
+):
+    httpx_mock.add_response(
+        method="POST",
+        url=EneaOutagesClient.BASE_URL,
+        match_content=b"page=awarie&oddzial=Pozna%C5%84&rejon=12&unpl_city=Komorniki&unpl_street=Kwiatowa",
+        text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
+    )
+    outages = sync_client.get_outages_for_department(
+        "Poznań", OutageType.UNPLANNED, area="12", city="Komorniki", street="Kwiatowa"
+    )
+    assert len(outages) == 1
+    assert outages[0].region == "Test Unplanned Area"
 
 
 def test_get_outages_for_address_unplanned_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
@@ -163,7 +179,7 @@ def test_get_outages_for_address_planned_sync(sync_client: EneaOutagesClient, ht
 def test_http_error_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(status_code=500)
     with pytest.raises(httpx.HTTPStatusError):
-        sync_client.get_outages_for_region("Poznań")
+        sync_client.get_outages_for_department("Poznań")
 
 
 # --- Edge Case Tests ---
@@ -181,7 +197,7 @@ def test_parse_date_format_unknown_month_unplanned(sync_client: EneaOutagesClien
         sync_client._parse_date_formats(date_str)
 
 
-def test_get_outages_for_region_skips_unparseable_block(
+def test_get_outages_for_department_skips_unparseable_block(
     sync_client: EneaOutagesClient, httpx_mock: HTTPXMock, caplog: pytest.LogCaptureFixture
 ):
     unparseable_block = """
@@ -195,14 +211,14 @@ def test_get_outages_for_region_skips_unparseable_block(
         text=f"<html><body>{unparseable_block}{SAMPLE_UNPLANNED_BLOCK}</body></html>",
     )
     with caplog.at_level("WARNING"):
-        outages = sync_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
+        outages = sync_client.get_outages_for_department("Poznań", OutageType.UNPLANNED)
 
     assert len(outages) == 1
     assert outages[0].region == "Test Unplanned Area"
     assert "Error parsing outage block" in caplog.text
 
 
-def test_get_outages_for_region_skips_block_raising_attribute_error(
+def test_get_outages_for_department_skips_block_raising_attribute_error(
     sync_client: EneaOutagesClient,
     httpx_mock: HTTPXMock,
     caplog: pytest.LogCaptureFixture,
@@ -218,13 +234,34 @@ def test_get_outages_for_region_skips_block_raising_attribute_error(
     monkeypatch.setattr(EneaOutagesClient, "_parse_outage_block", raise_attribute_error)
 
     with caplog.at_level("WARNING"):
-        outages = sync_client.get_outages_for_region("Poznań", OutageType.UNPLANNED)
+        outages = sync_client.get_outages_for_department("Poznań", OutageType.UNPLANNED)
 
     assert outages == []
     assert "Error parsing outage block" in caplog.text
 
 
-def test_get_available_regions_no_select_tag(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+def test_get_available_areas_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        text=(
+            "<html><body>"
+            '<select id="rejon" name="rejon">'
+            '<option value="7">Poznań</option>'
+            '<option value="12">Opalenica</option>'
+            "</select>"
+            "</body></html>"
+        )
+    )
+    areas = sync_client.get_available_areas("Poznań")
+    assert areas == {"7": "Poznań", "12": "Opalenica"}
+
+
+def test_get_available_areas_no_select_tag(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(text="<html><body><p>No rejon selector here.</p></body></html>")
+    areas = sync_client.get_available_areas("Szczecin")
+    assert areas == {}
+
+
+def test_get_available_departments_no_select_tag(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(text="<html><body><p>No region selector here.</p></body></html>")
-    regions = sync_client.get_available_regions()
-    assert regions == []
+    departments = sync_client.get_available_departments()
+    assert departments == []
