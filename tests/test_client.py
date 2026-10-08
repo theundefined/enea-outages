@@ -125,7 +125,7 @@ def test_get_outages_for_department_planned_sync(sync_client: EneaOutagesClient,
 def test_get_outages_for_department_with_area_city_street_sync(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         method="POST",
-        url=EneaOutagesClient.BASE_URL,
+        url="https://wylaczenia.operator.enea.pl/awarie/",
         match_content=b"page=awarie&oddzial=Pozna%C5%84&rejon=12&unpl_city=Komorniki&unpl_street=Kwiatowa",
         text=f"<html><body>{SAMPLE_UNPLANNED_BLOCK}</body></html>",
     )
@@ -310,3 +310,14 @@ def test_session_cookies_do_not_leak_between_requests(sync_client: EneaOutagesCl
 
     second_request = httpx_mock.get_requests()[1]
     assert "cookie" not in second_request.headers
+
+
+def test_planned_city_search_posts_to_planned_form(sync_client: EneaOutagesClient, httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://wylaczenia.operator.enea.pl/",
+        match_content=b"page=unpl&oddzial=Pozna%C5%84&unpl_city=Pozna%C5%84",
+        text=f"<html><body>{SAMPLE_PLANNED_BLOCK}</body></html>",
+    )
+    outages = sync_client.get_outages_for_department("Poznań", OutageType.PLANNED, city="Poznań")
+    assert len(outages) == 1

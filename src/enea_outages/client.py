@@ -19,6 +19,12 @@ class EneaOutagesClient:
     """Synchronous client for Enea Operator power outages."""
 
     BASE_URL = "https://wylaczenia.operator.enea.pl/index.php"
+    # Search form targets per page; the site ignores `page` in POST data and serves planned
+    # outages for any POST to index.php, so unplanned searches must go to /awarie/.
+    SEARCH_URLS = {
+        OutageType.PLANNED: "https://wylaczenia.operator.enea.pl/",
+        OutageType.UNPLANNED: "https://wylaczenia.operator.enea.pl/awarie/",
+    }
     DEFAULT_TIMEOUT = 10.0
     MONTH_MAP = {
         "stycznia": 1,
@@ -123,7 +129,7 @@ class EneaOutagesClient:
                 payload["unpl_city"] = city
             if street:
                 payload["unpl_street"] = street
-            response = self._client.post(self.BASE_URL, data=payload)
+            response = self._client.post(self.SEARCH_URLS[outage_type], data=payload)
         else:
             response = self._client.get(self.BASE_URL, params=payload)
 
